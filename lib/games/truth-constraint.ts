@@ -81,6 +81,7 @@ export class TruthConstraintGame extends BaseGame {
         culprit: '',
         accomplice: '',
         saboteur: '',
+        liar: '',
       },
     };
   }

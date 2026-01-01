@@ -7,8 +7,8 @@ import {
   HostGameInfo,
 } from './types';
 
-export class PerspectiveGame extends BaseGame {
-  readonly type: GameType = 'perspective';
+export class OneFalseDetailGame extends BaseGame {
+  readonly type: GameType = 'one-false-detail';
 
   assignRoles(players: Map<string, Player>): void {
     const eligiblePlayers = this.selectRandomPlayers(players.size);
@@ -18,12 +18,12 @@ export class PerspectiveGame extends BaseGame {
     // Assign 1 spy
     const spy = eligiblePlayers[0];
     spy.role = 'spy';
-    spy.privateInfo = `Từ khóa của bạn: ${this.aiContent?.spyTopic || 'Cắm trại'}. Góc nhìn: ${this.aiContent?.spyPerspective || 'Tự túc, ngoài trời'}`;
+    spy.privateInfo = `Bạn là SPY! Mô tả: ${this.aiContent?.truthDescription || 'Mô tả chung'}. Bạn phải SAI đúng 1 chi tiết!`;
 
     // Rest are normal
     for (let i = 1; i < eligiblePlayers.length; i++) {
       eligiblePlayers[i].role = 'normal';
-      eligiblePlayers[i].privateInfo = `Từ khóa: ${this.aiContent?.mainTopic || 'Du lịch'}`;
+      eligiblePlayers[i].privateInfo = `Mô tả: ${this.aiContent?.truthDescription || 'Mô tả chung'}`;
     }
 
     eligiblePlayers.forEach((p) => {
@@ -37,24 +37,24 @@ export class PerspectiveGame extends BaseGame {
     if (!player || player.isHost) return null;
 
     const baseInfo: PlayerGameInfo = {
-      promptTemplate: this.aiContent?.promptTemplate || 'Tôi quan tâm nhất là ___',
+      promptTemplate: this.aiContent?.promptTemplate || 'Mô tả địa điểm/vật bằng 1 câu',
       hints: [],
     };
 
     if (player.role === 'spy') {
-      baseInfo.topic = this.aiContent?.spyTopic;
       baseInfo.hints = [
         'Bạn là SPY!',
-        `Từ khóa của bạn: ${this.aiContent?.spyTopic}`,
-        `Góc nhìn: ${this.aiContent?.spyPerspective}`,
-        'Cố gắng blend in với nhóm!',
+        `Mô tả chung: ${this.aiContent?.truthDescription}`,
+        'BẮT BUỘC: Sai đúng 1 chi tiết (màu sắc, số lượng, thời gian, vị trí, v.v.)',
+        `Các loại chi tiết: ${this.aiContent?.detailCategories?.join(', ') || 'màu, số, thời gian, vị trí'}`,
       ];
     } else {
-      baseInfo.topic = this.aiContent?.mainTopic;
+      baseInfo.topic = this.aiContent?.topic;
       baseInfo.hints = [
-        `Từ khóa: ${this.aiContent?.mainTopic}`,
-        `Góc nhìn nhóm: ${this.aiContent?.mainPerspective}`,
-        'Tìm người có góc nhìn "lệch hệ"!',
+        `Chủ đề: ${this.aiContent?.topic}`,
+        `Mô tả đúng: ${this.aiContent?.truthDescription}`,
+        'Mô tả chính xác các chi tiết!',
+        'Tìm người có 1 chi tiết sai!',
       ];
     }
 
@@ -73,10 +73,10 @@ export class PerspectiveGame extends BaseGame {
 
     return {
       allRoles,
-      secretInfo: `Nhóm: "${this.aiContent?.mainTopic}" (${this.aiContent?.mainPerspective}). Spy: "${this.aiContent?.spyTopic}" (${this.aiContent?.spyPerspective})`,
+      secretInfo: `Mô tả đúng: ${this.aiContent?.truthDescription}. Spy phải sai 1 chi tiết.`,
       constraints: {
-        normal: `Từ khóa: ${this.aiContent?.mainTopic}`,
-        spy: `Từ khóa: ${this.aiContent?.spyTopic}`,
+        normal: 'Mô tả chính xác',
+        spy: 'Sai đúng 1 chi tiết',
         culprit: '',
         accomplice: '',
         saboteur: '',
@@ -86,8 +86,7 @@ export class PerspectiveGame extends BaseGame {
   }
 
   validateMessage(playerId: string, content: string): { valid: boolean; violations: string[] } {
-    // No strict validation for perspective game - it's about subtle differences
+    // Validation is observational - Host needs to check manually
     return { valid: true, violations: [] };
   }
 }
-

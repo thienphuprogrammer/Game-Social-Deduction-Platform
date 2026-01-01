@@ -159,6 +159,15 @@ export class WSServer {
       case 'answer-question':
         this.handleAnswerQuestion(ws, message.payload);
         break;
+      case 'start-voting':
+        this.handleStartVoting(ws, message.payload);
+        break;
+      case 'cast-vote':
+        this.handleCastVote(ws, message.payload);
+        break;
+      case 'end-voting':
+        this.handleEndVoting(ws, message.payload);
+        break;
       default:
         this.sendError(ws, `Unknown message type: ${message.type}`);
     }
@@ -186,13 +195,21 @@ export class WSServer {
   }
 
   private handleJoinRoom(ws: ExtendedWebSocket, payload: any) {
-    const { roomId, playerName } = payload;
+    const { roomId, playerName, existingPlayerId } = payload;
     if (!roomId || !playerName) {
       this.sendError(ws, 'Room ID and player name are required');
       return;
     }
 
-    const result = gameStateManager.joinRoom(roomId, playerName);
+    console.log('[WS] handleJoinRoom:', { roomId, playerName, existingPlayerId, wsPlayerId: ws.playerId });
+
+    // If WebSocket already has a playerId, use it for reconnect
+    const reconnectPlayerId = existingPlayerId || ws.playerId;
+    console.log('[WS] Using reconnectPlayerId:', reconnectPlayerId);
+
+    const result = gameStateManager.joinRoom(roomId, playerName, reconnectPlayerId);
+    console.log('[WS] joinRoom result:', { hasError: !!result.error, hasPlayer: !!result.player, error: result.error });
+    
     if (result.error || !result.player) {
       this.sendError(ws, result.error || 'Failed to join room');
       return;
@@ -406,6 +423,65 @@ export class WSServer {
     if (result.error) {
       this.sendError(ws, result.error);
       return;
+    }
+
+    this.broadcastRoomState(roomId);
+  }
+
+  private handleStartVoting(ws: ExtendedWebSocket, payload: any) {
+    const { roomId, hostId } = payload;
+    if (!roomId || !hostId) {
+      this.sendError(ws, 'Room ID and host ID are required');
+      return;
+    }
+
+    const result = gameStateManager.startVoting(roomId, hostId);
+    if (result.error) {
+      this.sendError(ws, result.error);
+      return;
+    }
+
+    this.broadcastRoomState(roomId);
+  }
+
+  private handleCastVote(ws: ExtendedWebSocket, payload: any) {
+    const { roomId, voterId, targetId } = payload;
+    if (!roomId || !voterId || !targetId) {
+      this.sendError(ws, 'Room ID, voter ID, and target ID are required');
+      return;
+    }
+
+    const result = gameStateManager.castVote(roomId, voterId, targetId);
+    if (result.error) {
+      this.sendError(ws, result.error);
+      return;
+    }
+
+    this.broadcastRoomState(roomId);
+  }
+
+  private handleEndVoting(ws: ExtendedWebSocket, payload: any) {
+    const { roomId, hostId } = payload;
+    if (!roomId || !hostId) {
+      this.sendError(ws, 'Room ID and host ID are required');
+      return;
+    }
+
+    const result = gameStateManager.endVoting(roomId, hostId);
+    if (result.error) {
+      this.sendError(ws, result.error);
+      return;
+    }
+
+    // Send voting results to all clients
+    const clients = this.clients.get(roomId);
+    if (clients && result.results) {
+      clients.forEach((client) => {
+        this.send(client, {
+          type: 'voting-results',
+          payload: { results: result.results },
+        });
+      });
     }
 
     this.broadcastRoomState(roomId);

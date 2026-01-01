@@ -5,6 +5,7 @@ import {
   AIGameContent,
   PlayerGameInfo,
   HostGameInfo,
+  Message,
 } from './types';
 
 export class AnswerFilterGame extends BaseGame {
@@ -77,6 +78,7 @@ export class AnswerFilterGame extends BaseGame {
         spy: '',
         culprit: '',
         accomplice: '',
+        liar: '',
       },
     };
   }

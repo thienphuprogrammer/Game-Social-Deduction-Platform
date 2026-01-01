@@ -94,6 +94,7 @@ export class AlibiGame extends BaseGame {
         normal: 'Nói bình thường',
         spy: '',
         saboteur: '',
+        liar: '',
       },
     };
   }

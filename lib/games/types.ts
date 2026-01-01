@@ -4,14 +4,20 @@ export type GameType =
   | 'truth-constraint'
   | 'chain'
   | 'banned-words'
-  | 'answer-filter';
+  | 'answer-filter'
+  | 'two-layer'
+  | 'constraint-spy'
+  | 'common-ground'
+  | 'liar-20q'
+  | 'one-false-detail';
 
 export type PlayerRole = 
   | 'normal'
   | 'spy'
   | 'culprit'
   | 'accomplice'
-  | 'saboteur';
+  | 'saboteur'
+  | 'liar';
 
 export interface Player {
   id: string;
@@ -33,6 +39,19 @@ export interface Message {
   hostAnswer?: boolean | null; // For Answer Filter game: true = Yes, false = No, null = not answered
 }
 
+export interface Vote {
+  voterId: string;
+  voterName: string;
+  targetId: string;
+  timestamp: number;
+}
+
+export interface VotingState {
+  votes: Map<string, Vote>; // voterId -> Vote
+  isActive: boolean;
+  startedAt?: number;
+}
+
 export type RoomStatus = 'waiting' | 'setup' | 'playing' | 'voting' | 'ended';
 
 export interface Room {
@@ -43,6 +62,7 @@ export interface Room {
   players: Map<string, Player>;
   gameInstance: BaseGameState | null;
   aiContent: AIGameContent | null;
+  votingState: VotingState | null;
   createdAt: number;
 }
 
@@ -113,6 +133,37 @@ export interface AIGameContent {
   };
   saboteurHint?: string;
   difficulty?: string;
+  
+  // Two-Layer specific
+  scaleDescription?: string;
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleValues?: Array<{ level: number; description: string }>;
+  spyLevel?: number | string;
+  
+  // Constraint-Spy specific
+  constraintRule?: string;
+  ruleExplanation?: string;
+  exampleConstraints?: {
+    valid: string[];
+    invalid: string[];
+  };
+  
+  // Common-Ground specific
+  commonTraits?: string[];
+  spyTrait?: string;
+  traitExplanation?: string;
+  
+  // Liar-20Q specific
+  mysteryItem?: string;
+  itemDescription?: string;
+  liarInstruction?: string;
+  questionGuidelines?: string[];
+  
+  // One-False-Detail specific
+  truthDescription?: string;
+  detailCategories?: string[];
+  exampleFalseDetails?: string[];
 }
 
 export interface PlayerView {
@@ -133,6 +184,7 @@ export interface PlayerView {
   } | null;
   gameInfo: PlayerGameInfo | null;
   messages: Message[];
+  votingView?: VotingView | null;
 }
 
 export interface HostView {
@@ -150,6 +202,7 @@ export interface HostView {
   aiContent: AIGameContent | null;
   gameInfo: HostGameInfo | null;
   messages: Message[];
+  votingView?: VotingView | null;
 }
 
 export interface PlayerGameInfo {
@@ -163,6 +216,21 @@ export interface HostGameInfo {
   allRoles: Array<{ playerId: string; playerName: string; role: PlayerRole; privateInfo?: string }>;
   secretInfo: string;
   constraints: Record<PlayerRole, string>;
+}
+
+export interface VotingResult {
+  targetId: string;
+  targetName: string;
+  voteCount: number;
+  voters: string[];
+}
+
+export interface VotingView {
+  isActive: boolean;
+  hasVoted: boolean;
+  myVote?: string; // target ID
+  results?: VotingResult[]; // Only shown when voting ends
+  voteCounts?: Record<string, number>; // During voting: playerId -> count
 }
 
 export const GAME_INFO: Record<GameType, {
@@ -213,6 +281,41 @@ export const GAME_INFO: Record<GameType, {
     minPlayers: 4,
     maxPlayers: 12,
     roles: ['normal', 'saboteur'],
+  },
+  'two-layer': {
+    name: 'Từ khóa "2 lớp"',
+    description: 'Mỗi người nhận 1 mức trên thang (1-5). Điệp viên nhận mức lạc thang. Mô tả đúng mức của mình.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    roles: ['normal', 'spy'],
+  },
+  'constraint-spy': {
+    name: 'Câu nói phải chứa điều kiện',
+    description: 'Mọi người biết luật ngôn ngữ bí mật. Ai không biết sẽ tự lộ vì không đáp ứng điều kiện.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    roles: ['normal', 'spy'],
+  },
+  'common-ground': {
+    name: 'Hai sự thật chung',
+    description: 'Mỗi người nói "Tôi thuộc nhóm A hoặc B". Điệp viên cố nói không thuộc cả hai nhưng vẫn giống.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    roles: ['normal', 'spy'],
+  },
+  'liar-20q': {
+    name: '20 câu hỏi có kẻ phá',
+    description: 'MC nghĩ 1 vật. Nhóm hỏi Yes/No. 1 người dối đúng 1 lần. Tìm vật và tìm kẻ dối.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    roles: ['normal', 'liar'],
+  },
+  'one-false-detail': {
+    name: 'Đúng 1 chi tiết sai',
+    description: 'MC mô tả 1 địa điểm/vật. Mọi người mô tả, nhưng điệp viên phải sai đúng 1 chi tiết.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    roles: ['normal', 'spy'],
   },
 };
 

@@ -133,7 +133,7 @@ export default function Home() {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-200">
-          <h3 className="font-semibold text-slate-700 mb-3 text-center">6 Game có sẵn:</h3>
+          <h3 className="font-semibold text-slate-700 mb-3 text-center">11 Game có sẵn:</h3>
           <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
             <div className="bg-slate-50 p-2 rounded-lg">🔍 Alibi 1 câu</div>
             <div className="bg-slate-50 p-2 rounded-lg">🎭 Perspective</div>
@@ -141,6 +141,11 @@ export default function Home() {
             <div className="bg-slate-50 p-2 rounded-lg">⛓️ 3-hop Chain</div>
             <div className="bg-slate-50 p-2 rounded-lg">🚫 Banned Words</div>
             <div className="bg-slate-50 p-2 rounded-lg">🔮 Answer Filter</div>
+            <div className="bg-slate-50 p-2 rounded-lg">📊 Từ khóa "2 lớp"</div>
+            <div className="bg-slate-50 p-2 rounded-lg">📝 Constraint Spy</div>
+            <div className="bg-slate-50 p-2 rounded-lg">🤝 Common Ground</div>
+            <div className="bg-slate-50 p-2 rounded-lg">❓ Liar in 20Q</div>
+            <div className="bg-slate-50 p-2 rounded-lg">🎯 One False Detail</div>
           </div>
         </div>
       </div>

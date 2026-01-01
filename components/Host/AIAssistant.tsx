@@ -255,7 +255,16 @@ export default function AIAssistant({
 
           <div className="flex flex-wrap gap-2 mb-4">
             <button
-              onClick={() => onAccept(aiContent)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[AIAssistant] Accept button clicked', { aiContent, hasOnAccept: !!onAccept });
+                if (onAccept && aiContent) {
+                  onAccept(aiContent);
+                } else {
+                  console.error('[AIAssistant] Missing onAccept or aiContent', { onAccept, aiContent });
+                }
+              }}
               className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
             >
               ✓ Chấp nhận

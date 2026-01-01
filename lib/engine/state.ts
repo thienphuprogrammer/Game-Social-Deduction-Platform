@@ -9,6 +9,10 @@ import {
   PlayerView,
   HostView,
   Message,
+  Vote,
+  VotingState,
+  VotingResult,
+  VotingView,
 } from '../games/types';
 import { BaseGame } from '../games/base';
 import { createGame } from './factory';
@@ -37,6 +41,7 @@ export class GameStateManager {
       players: new Map([[hostId, host]]),
       gameInstance: null,
       aiContent: null,
+      votingState: null,
       createdAt: Date.now(),
     };
 
@@ -44,7 +49,7 @@ export class GameStateManager {
     return { roomId, hostId };
   }
 
-  joinRoom(roomId: string, playerName: string): { player: Player | null; error?: string } {
+  joinRoom(roomId: string, playerName: string, existingPlayerId?: string): { player: Player | null; error?: string } {
     const room = this.rooms.get(roomId);
 
     if (!room) {
@@ -55,15 +60,53 @@ export class GameStateManager {
       return { player: null, error: 'Game đã bắt đầu' };
     }
 
-    const existingPlayer = Array.from(room.players.values()).find(
-      (p) => p.name.toLowerCase() === playerName.toLowerCase()
+    console.log('[joinRoom] Called with:', { roomId, playerName, existingPlayerId });
+    console.log('[joinRoom] Current players:', Array.from(room.players.values()).map(p => ({ id: p.id, name: p.name, isHost: p.isHost })));
+
+    // If existingPlayerId is provided, check if it's a reconnect
+    if (existingPlayerId) {
+      const existingPlayer = room.players.get(existingPlayerId);
+      console.log('[joinRoom] Checking reconnect for playerId:', existingPlayerId, 'Found:', !!existingPlayer);
+      if (existingPlayer) {
+        // Reconnect: return existing player (allow same name)
+        console.log('[joinRoom] Reconnecting existing player:', existingPlayer.name);
+        return { player: existingPlayer };
+      }
+    }
+
+    // If no existingPlayerId, try to find player by name (for reconnect without playerId)
+    // This handles the case where player reloads page but doesn't have playerId in URL
+    if (!existingPlayerId) {
+      const playerByName = Array.from(room.players.values()).find(
+        (p) => !p.isHost && p.name.toLowerCase() === playerName.toLowerCase()
+      );
+      if (playerByName) {
+        console.log('[joinRoom] Found existing player by name, allowing reconnect:', playerByName.name);
+        return { player: playerByName };
+      }
+    }
+
+    // Check for name conflict (excluding the reconnecting player and host)
+    const conflictingPlayer = Array.from(room.players.values()).find(
+      (p) => !p.isHost && // Don't check against host
+             p.name.toLowerCase() === playerName.toLowerCase() && 
+             (!existingPlayerId || p.id !== existingPlayerId) // Exclude self if reconnecting
     );
 
-    if (existingPlayer) {
+    console.log('[joinRoom] Conflicting player:', conflictingPlayer ? { id: conflictingPlayer.id, name: conflictingPlayer.name } : null);
+
+    if (conflictingPlayer) {
       return { player: null, error: 'Tên đã được sử dụng' };
     }
 
-    const playerId = uuidv4();
+    // If reconnecting with existing ID but player not found, create new
+    // (This shouldn't happen, but handle it gracefully)
+    if (existingPlayerId && !room.players.has(existingPlayerId)) {
+      console.log('[joinRoom] existingPlayerId provided but player not found, creating new player');
+    }
+
+    // New player
+    const playerId = existingPlayerId || uuidv4();
     const player: Player = {
       id: playerId,
       name: playerName,
@@ -73,6 +116,7 @@ export class GameStateManager {
     };
 
     room.players.set(playerId, player);
+    console.log('[joinRoom] Created new player:', { id: playerId, name: playerName });
     return { player };
   }
 
@@ -234,6 +278,9 @@ export class GameStateManager {
       messages = gameInstance.getMessages();
     }
 
+    // Get voting view
+    const votingView = this.getVotingView(roomId, playerId);
+
     return {
       roomId: room.id,
       gameType: room.gameType,
@@ -249,6 +296,7 @@ export class GameStateManager {
         : null,
       gameInfo,
       messages,
+      votingView,
     };
   }
 
@@ -275,6 +323,9 @@ export class GameStateManager {
       messages = gameInstance.getMessages();
     }
 
+    // Get voting view for host
+    const votingView = this.getVotingView(roomId, hostId);
+
     return {
       roomId: room.id,
       gameType: room.gameType,
@@ -283,6 +334,7 @@ export class GameStateManager {
       aiContent: room.aiContent,
       gameInfo,
       messages,
+      votingView,
     };
   }
 
@@ -322,9 +374,138 @@ export class GameStateManager {
     room.gameType = null;
     room.aiContent = null;
     room.gameInstance = null;
+    room.votingState = null;
     this.gameInstances.delete(roomId);
 
     return { success: true };
+  }
+
+  // Voting methods
+  startVoting(roomId: string, hostId: string): { success: boolean; error?: string } {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return { success: false, error: 'Phòng không tồn tại' };
+    }
+
+    if (room.hostId !== hostId) {
+      return { success: false, error: 'Chỉ host mới có thể bắt đầu vote' };
+    }
+
+    if (room.status !== 'playing') {
+      return { success: false, error: 'Game phải đang chơi để bắt đầu vote' };
+    }
+
+    room.status = 'voting';
+    room.votingState = {
+      votes: new Map(),
+      isActive: true,
+      startedAt: Date.now(),
+    };
+
+    return { success: true };
+  }
+
+  castVote(roomId: string, voterId: string, targetId: string): { success: boolean; error?: string } {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return { success: false, error: 'Phòng không tồn tại' };
+    }
+
+    if (room.status !== 'voting' || !room.votingState?.isActive) {
+      return { success: false, error: 'Voting không hoạt động' };
+    }
+
+    const voter = room.players.get(voterId);
+    if (!voter || voter.isHost) {
+      return { success: false, error: 'Chỉ người chơi mới có thể vote' };
+    }
+
+    const target = room.players.get(targetId);
+    if (!target || target.isHost) {
+      return { success: false, error: 'Không thể vote người này' };
+    }
+
+    if (voterId === targetId) {
+      return { success: false, error: 'Không thể vote chính mình' };
+    }
+
+    const vote: Vote = {
+      voterId,
+      voterName: voter.name,
+      targetId,
+      timestamp: Date.now(),
+    };
+
+    room.votingState.votes.set(voterId, vote);
+    return { success: true };
+  }
+
+  endVoting(roomId: string, hostId: string): { success: boolean; results?: VotingResult[]; error?: string } {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return { success: false, error: 'Phòng không tồn tại' };
+    }
+
+    if (room.hostId !== hostId) {
+      return { success: false, error: 'Chỉ host mới có thể kết thúc vote' };
+    }
+
+    if (!room.votingState) {
+      return { success: false, error: 'Không có phiên vote nào' };
+    }
+
+    room.votingState.isActive = false;
+
+    // Calculate results
+    const voteCounts = new Map<string, { count: number; voters: string[] }>();
+    
+    room.votingState.votes.forEach((vote) => {
+      if (!voteCounts.has(vote.targetId)) {
+        voteCounts.set(vote.targetId, { count: 0, voters: [] });
+      }
+      const entry = voteCounts.get(vote.targetId)!;
+      entry.count++;
+      entry.voters.push(vote.voterName);
+    });
+
+    const results: VotingResult[] = [];
+    voteCounts.forEach((value, targetId) => {
+      const target = room.players.get(targetId);
+      results.push({
+        targetId,
+        targetName: target?.name || 'Unknown',
+        voteCount: value.count,
+        voters: value.voters,
+      });
+    });
+
+    // Sort by vote count descending
+    results.sort((a, b) => b.voteCount - a.voteCount);
+
+    return { success: true, results };
+  }
+
+  getVotingView(roomId: string, playerId: string): VotingView | null {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.votingState) return null;
+
+    const player = room.players.get(playerId);
+    if (!player) return null;
+
+    const myVote = room.votingState.votes.get(playerId);
+    
+    // Calculate current vote counts
+    const voteCounts: Record<string, number> = {};
+    room.votingState.votes.forEach((vote) => {
+      voteCounts[vote.targetId] = (voteCounts[vote.targetId] || 0) + 1;
+    });
+
+    return {
+      isActive: room.votingState.isActive,
+      hasVoted: !!myVote,
+      myVote: myVote?.targetId,
+      voteCounts,
+    };
   }
 
   getRoom(roomId: string): Room | undefined {

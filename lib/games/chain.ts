@@ -83,6 +83,7 @@ export class ChainGame extends BaseGame {
         culprit: '',
         accomplice: '',
         saboteur: '',
+        liar: '',
       },
     };
   }

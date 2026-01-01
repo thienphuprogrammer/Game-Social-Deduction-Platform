@@ -17,6 +17,7 @@ const ROLE_DISPLAY: Record<PlayerRole, { label: string; color: string; icon: str
   culprit: { label: 'Thủ phạm', color: 'bg-red-100 text-red-700 border-red-300', icon: '🦹' },
   accomplice: { label: 'Đồng phạm', color: 'bg-orange-100 text-orange-700 border-orange-300', icon: '🤝' },
   saboteur: { label: 'Kẻ phá', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: '💣' },
+  liar: { label: 'Kẻ dối', color: 'bg-pink-100 text-pink-700 border-pink-300', icon: '🤥' },
 };
 
 export default function PlayerView({ view, onSendMessage, lastMessageResult }: PlayerViewProps) {

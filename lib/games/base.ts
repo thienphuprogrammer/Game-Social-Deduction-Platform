@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import {
   GameType,
   Player,
@@ -38,7 +39,7 @@ export abstract class BaseGame {
     const validation = this.validateMessage(playerId, content);
 
     const message: Message = {
-      id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      id: uuidv4(),
       playerId,
       playerName: player.name,
       content: content.trim(),

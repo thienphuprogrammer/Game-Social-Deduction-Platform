@@ -23,6 +23,7 @@ const ROLE_LABELS: Record<PlayerRole, { label: string; color: string }> = {
   culprit: { label: 'Thủ phạm', color: 'bg-red-100 text-red-700' },
   accomplice: { label: 'Đồng phạm', color: 'bg-orange-100 text-orange-700' },
   saboteur: { label: 'Kẻ phá', color: 'bg-purple-100 text-purple-700' },
+  liar: { label: 'Kẻ dối', color: 'bg-pink-100 text-pink-700' },
 };
 
 export default function PlayerManager({ players, status }: PlayerManagerProps) {

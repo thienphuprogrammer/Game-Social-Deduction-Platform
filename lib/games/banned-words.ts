@@ -80,6 +80,7 @@ export class BannedWordsGame extends BaseGame {
         culprit: '',
         accomplice: '',
         saboteur: '',
+        liar: '',
       },
     };
   }

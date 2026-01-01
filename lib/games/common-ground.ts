@@ -7,8 +7,8 @@ import {
   HostGameInfo,
 } from './types';
 
-export class PerspectiveGame extends BaseGame {
-  readonly type: GameType = 'perspective';
+export class CommonGroundGame extends BaseGame {
+  readonly type: GameType = 'common-ground';
 
   assignRoles(players: Map<string, Player>): void {
     const eligiblePlayers = this.selectRandomPlayers(players.size);
@@ -18,12 +18,13 @@ export class PerspectiveGame extends BaseGame {
     // Assign 1 spy
     const spy = eligiblePlayers[0];
     spy.role = 'spy';
-    spy.privateInfo = `Từ khóa của bạn: ${this.aiContent?.spyTopic || 'Cắm trại'}. Góc nhìn: ${this.aiContent?.spyPerspective || 'Tự túc, ngoài trời'}`;
+    spy.privateInfo = `Bạn là SPY! Đặc điểm của bạn: ${this.aiContent?.spyTrait || 'Đặc điểm khác'}. Cố nói không thuộc cả hai nhóm nhưng giống họ!`;
 
-    // Rest are normal
+    // Rest are normal with common traits
     for (let i = 1; i < eligiblePlayers.length; i++) {
       eligiblePlayers[i].role = 'normal';
-      eligiblePlayers[i].privateInfo = `Từ khóa: ${this.aiContent?.mainTopic || 'Du lịch'}`;
+      const traits = this.aiContent?.commonTraits?.join(' hoặc ') || 'Nhóm A hoặc B';
+      eligiblePlayers[i].privateInfo = `Bạn thuộc: ${traits}`;
     }
 
     eligiblePlayers.forEach((p) => {
@@ -37,24 +38,24 @@ export class PerspectiveGame extends BaseGame {
     if (!player || player.isHost) return null;
 
     const baseInfo: PlayerGameInfo = {
-      promptTemplate: this.aiContent?.promptTemplate || 'Tôi quan tâm nhất là ___',
+      promptTemplate: this.aiContent?.promptTemplate || 'Tôi thuộc nhóm ___ hoặc ___',
       hints: [],
     };
 
     if (player.role === 'spy') {
-      baseInfo.topic = this.aiContent?.spyTopic;
       baseInfo.hints = [
         'Bạn là SPY!',
-        `Từ khóa của bạn: ${this.aiContent?.spyTopic}`,
-        `Góc nhìn: ${this.aiContent?.spyPerspective}`,
-        'Cố gắng blend in với nhóm!',
+        `Đặc điểm của bạn: ${this.aiContent?.spyTrait}`,
+        'Bạn KHÔNG thuộc các nhóm chung',
+        'Cố gắng nói sao cho không bị phát hiện!',
       ];
     } else {
-      baseInfo.topic = this.aiContent?.mainTopic;
+      baseInfo.topic = this.aiContent?.topic;
       baseInfo.hints = [
-        `Từ khóa: ${this.aiContent?.mainTopic}`,
-        `Góc nhìn nhóm: ${this.aiContent?.mainPerspective}`,
-        'Tìm người có góc nhìn "lệch hệ"!',
+        `Chủ đề: ${this.aiContent?.topic}`,
+        `${player.privateInfo}`,
+        'Nói theo format: "Tôi thuộc nhóm A hoặc B"',
+        'Tìm người "không khớp" với đa số!',
       ];
     }
 
@@ -73,10 +74,10 @@ export class PerspectiveGame extends BaseGame {
 
     return {
       allRoles,
-      secretInfo: `Nhóm: "${this.aiContent?.mainTopic}" (${this.aiContent?.mainPerspective}). Spy: "${this.aiContent?.spyTopic}" (${this.aiContent?.spyPerspective})`,
+      secretInfo: `Chủ đề: ${this.aiContent?.topic}. Nhóm: ${this.aiContent?.commonTraits?.join(', ')}. Spy: ${this.aiContent?.spyTrait}`,
       constraints: {
-        normal: `Từ khóa: ${this.aiContent?.mainTopic}`,
-        spy: `Từ khóa: ${this.aiContent?.spyTopic}`,
+        normal: `Thuộc: ${this.aiContent?.commonTraits?.join(' hoặc ')}`,
+        spy: `Đặc điểm: ${this.aiContent?.spyTrait}`,
         culprit: '',
         accomplice: '',
         saboteur: '',
@@ -86,8 +87,7 @@ export class PerspectiveGame extends BaseGame {
   }
 
   validateMessage(playerId: string, content: string): { valid: boolean; violations: string[] } {
-    // No strict validation for perspective game - it's about subtle differences
+    // No strict validation - observational game
     return { valid: true, violations: [] };
   }
 }
-

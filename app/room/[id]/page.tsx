@@ -11,6 +11,7 @@ import AnswerFilterPanel from '@/components/Host/AnswerFilterPanel';
 import PlayerView from '@/components/Player/PlayerView';
 import MessageList from '@/components/Player/MessageList';
 import ErrorToast from '@/components/UI/ErrorToast';
+import SuccessToast from '@/components/UI/SuccessToast';
 
 function RoomPageContent() {
   const params = useParams();
@@ -31,17 +32,47 @@ function RoomPageContent() {
   const [connected, setConnected] = useState(false);
   const [lastMessageResult, setLastMessageResult] = useState<{ valid: boolean; violations?: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const isConnecting = useRef(false);
 
   const sendMessage = useCallback((type: string, payload: any) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('[WS] Sending message:', type, payload);
-      wsRef.current.send(JSON.stringify({ type, payload }));
+    console.log('[WS] sendMessage called', { 
+      type, 
+      hasWs: !!wsRef.current,
+      readyState: wsRef.current?.readyState,
+      isOpen: wsRef.current?.readyState === WebSocket.OPEN
+    });
+    
+    if (!wsRef.current) {
+      const errorMsg = 'WebSocket chưa được khởi tạo';
+      console.error('[WS] Error:', errorMsg);
+      setError(errorMsg);
+      return;
+    }
+    
+    if (wsRef.current.readyState === WebSocket.OPEN) {
+      const messageStr = JSON.stringify({ type, payload });
+      console.log('[WS] Sending message:', type, 'Payload size:', messageStr.length, 'bytes');
+      try {
+        wsRef.current.send(messageStr);
+        console.log('[WS] Message sent successfully');
+      } catch (error) {
+        console.error('[WS] Error sending message:', error);
+        setError(`Lỗi khi gửi tin nhắn: ${error}`);
+      }
     } else {
-      console.warn('[WS] WebSocket not connected, cannot send message:', type);
-      setError('Không thể gửi tin nhắn. Đang kết nối lại...');
+      const stateNames = {
+        [WebSocket.CONNECTING]: 'CONNECTING',
+        [WebSocket.OPEN]: 'OPEN',
+        [WebSocket.CLOSING]: 'CLOSING',
+        [WebSocket.CLOSED]: 'CLOSED'
+      };
+      const stateName = stateNames[wsRef.current.readyState] || 'UNKNOWN';
+      const errorMsg = `WebSocket không kết nối (${stateName}). Đang kết nối lại...`;
+      console.warn('[WS] WebSocket not connected:', stateName, 'Cannot send message:', type);
+      setError(errorMsg);
     }
   }, []);
 
@@ -66,7 +97,17 @@ function RoomPageContent() {
       if (isHost && playerId) {
         ws.send(JSON.stringify({ type: 'get-state', payload: { roomId, playerId, isHost: true } }));
       } else {
-        ws.send(JSON.stringify({ type: 'join-room', payload: { roomId, playerName } }));
+        // Include existing playerId if available (for reconnect)
+        const payload = { 
+          roomId, 
+          playerName, 
+          existingPlayerId: playerIdParam || undefined 
+        };
+        console.log('[RoomPage] Sending join-room:', payload);
+        ws.send(JSON.stringify({ 
+          type: 'join-room', 
+          payload
+        }));
       }
     };
 
@@ -111,7 +152,8 @@ function RoomPageContent() {
         case 'content-set':
           // Content was set successfully - state will be updated via broadcastRoomState
           console.log('[WS] Content set successfully');
-          // Optionally show a success message
+          setSuccessMessage('Đã chấp nhận nội dung thành công!');
+          setTimeout(() => setSuccessMessage(null), 3000);
           break;
 
         case 'message-result':
@@ -151,7 +193,11 @@ function RoomPageContent() {
               if (isHost && playerId) {
                 newWs.send(JSON.stringify({ type: 'get-state', payload: { roomId, playerId, isHost: true } }));
               } else {
-                newWs.send(JSON.stringify({ type: 'join-room', payload: { roomId, playerName } }));
+                // Include existing playerId for reconnect
+                newWs.send(JSON.stringify({ 
+                  type: 'join-room', 
+                  payload: { roomId, playerName, existingPlayerId: playerId || undefined } 
+                }));
               }
             };
 
@@ -207,21 +253,38 @@ function RoomPageContent() {
   };
 
   const handleAcceptContent = (content: AIGameContent) => {
-    console.log('[Accept] handleAcceptContent called', { playerId, roomId, hasContent: !!content });
+    console.log('[Accept] handleAcceptContent called', { 
+      playerId, 
+      roomId, 
+      hasContent: !!content,
+      contentKeys: content ? Object.keys(content) : null,
+      wsReady: wsRef.current?.readyState,
+      wsState: wsRef.current?.readyState === WebSocket.OPEN ? 'OPEN' : wsRef.current?.readyState === WebSocket.CONNECTING ? 'CONNECTING' : wsRef.current?.readyState === WebSocket.CLOSING ? 'CLOSING' : 'CLOSED'
+    });
+    
     if (!playerId) {
-      setError('Chưa có thông tin người chơi. Vui lòng đợi...');
+      const errorMsg = 'Chưa có thông tin người chơi. Vui lòng đợi...';
+      console.error('[Accept] Error:', errorMsg);
+      setError(errorMsg);
       return;
     }
     if (!roomId) {
-      setError('Chưa có thông tin phòng. Vui lòng đợi...');
+      const errorMsg = 'Chưa có thông tin phòng. Vui lòng đợi...';
+      console.error('[Accept] Error:', errorMsg);
+      setError(errorMsg);
       return;
     }
     if (!content) {
-      setError('Không có nội dung để chấp nhận');
+      const errorMsg = 'Không có nội dung để chấp nhận';
+      console.error('[Accept] Error:', errorMsg);
+      setError(errorMsg);
       return;
     }
+    
+    console.log('[Accept] Setting content and sending message...');
     setAiContent(content);
     sendMessage('set-content', { roomId, hostId: playerId, aiContent: content });
+    console.log('[Accept] Message sent');
   };
 
   const handleEditContent = (content: AIGameContent) => {
@@ -293,6 +356,7 @@ function RoomPageContent() {
     return (
       <>
         <ErrorToast error={error} onClose={() => setError(null)} />
+        <SuccessToast message={successMessage} onClose={() => setSuccessMessage(null)} />
         <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4">
           <div className="max-w-7xl mx-auto space-y-6">
           {/* Host Controls */}
@@ -378,6 +442,7 @@ function RoomPageContent() {
     return (
       <>
         <ErrorToast error={error} onClose={() => setError(null)} />
+        <SuccessToast message={successMessage} onClose={() => setSuccessMessage(null)} />
         <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4">
           <div className="max-w-2xl mx-auto">
             <PlayerView 
